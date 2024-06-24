@@ -1,3 +1,13 @@
+> FLEDGE has been renamed to Protected Audience API. To learn more about the name change, see the [blog post](https://privacysandbox.com/intl/en_us/news/protected-audience-api-our-new-name-for-fledge)
+
+**Authors:** <br>
+[Priyanka Chatterjee][1], Google Privacy Sandbox<br>
+[Alexandra White][2], Google Chrome<br>
+[Joe Lewis][3], Google Android<br>
+Chanda Patel, Google<br>
+[Peiwen Hu][4], Google Privacy Sandbox
+
+
 # Overview of FLEDGE Services
 
 The [Privacy Sandbox](https://privacysandbox.com) aims to develop technologies
@@ -76,7 +86,9 @@ Some of the key properties of a TEE include:
 ### Cloud platform
 
 Services running in TEE should be deployed on a cloud platform that supports
-necessary security features. **Details specific to cloud platform support
+necessary security features. See the [Public Cloud TEE requirements explainer][9] for more details.
+
+**Details specific to cloud platform support
 will be published at a later date. We expect to support  Amazon Web Services
 (AWS), Google Cloud Platform (GCP), and other cloud providers in the future.**
 
@@ -145,13 +157,9 @@ The following entities are inherently without trust:
 
 *   Service operators.
 *   A client, such as an app or browser.
-    *   For Android, the device must be attested before the client can make an
-        outgoing request to a FLEDGE service. The details for Android device
-        attestation will be published in a later document.
-    *   Browsers are not required to attest when querying service APIs. As
-        such, there is a risk of the information served being visible to
-        entities beyond the browser. Service operators should be aware of
-        this when designing their application.
+    * _Note: We no longer expect to need any device attestation as protection for [Bidding & Auction Service][6].
+      As the design has evolved, requests to the B&A Service now pass through the existing untrusted seller's ad service, which can perform
+      its own protections from invalid traffic.  Also, Web Environment Integrity is an entirely unrelated effort._
 
 ## System overview
 
@@ -213,7 +221,7 @@ available to the service after it has been attested.
 #### Request decryption
 
 Upon receiving a request, the FLEDGE service checks the version of the public
-key and either lookup corresponding private keys from its in-memory cache.
+key and looks up corresponding private keys from its in-memory cache.
 
 The FLEDGE service decrypts the request using split private keys, processes
 the request and then returns an encrypted response back to the client. 
@@ -237,7 +245,7 @@ The FLEDGE service sends requests to the key management system to fetch
 private keys and public keys at service bootstrap. Before such keys are
 granted to the service, the binary hash of the FLEDGE service and guest
 operating system running on the virtual machine is validated against a hash
-of the open source image; this validation process is termed as attestation.
+of the open source image; this validation process is termed an attestation.
 
 *   The FLEDGE service sends requests to private key hosting services to
     pre-fetch private keys. Private keys are granted to a FLEDGE service only
@@ -271,8 +279,8 @@ A _key management system_ includes multiple services that are tasked with:
 *   Provisioning keys to end-user devices.
 *   Provisioning key pairs to real-time services.
 
-In this proposal, two separate trusted parties operate key management
-systems.
+In this proposal, two separate trusted parties called **Coordinators** operate key
+management systems.
 
 #### Key Management System A
 
@@ -322,15 +330,20 @@ correspond to the version of the public key that is used for encryption.
 Public keys have a client side time-to-live (TTL) of N days. Corresponding
 private keys should have a TTL of at least N+1 days.
 
+#### Adtech authentication by Coordinator
+
+When an adtech onboards to a [cloud platform](#cloud-platform) to [deploy](#deployment-by-adtechs)
+and operate FLEDGE services, they need to be enrolled with Coordinator. Refer [here][7] for more details.
+
 ## Initial plans for release and deployment
 
 ### Release by Google
 
-*   Developers author open source service code and Google releases source code
-    to an open source repository (GitHub). 
-*   Google may also publish build artifacts to an open source repo in
-    [github.com/privacysandbox](https://github.com/privacysandbox) org for
-    binary validation.
+*   Developers author open source [Key Management Systems](#key-management-systems)
+    code and Google releases source code to an open source repository (GitHub). 
+*   Google Privacy Sandbox is publishing [FLEDGE services](#fledge-services) source code and build
+    artifacts to an open source repo in [github.com/privacysandbox](https://github.com/privacysandbox)
+    org. Refer [here][8] for the Github code repo of different Privacy Sandbox services.
 
 ### Deployment by adtechs
 
@@ -339,8 +352,14 @@ helper guides provided by Google. This includes running binaries of the
 service in the TEE setup specific to a cloud platform. Adtechs are
 responsible for the productionization of FLEDGE services operated by them.
 
-Details regarding Key Management Systems deployment will be published at a
-later date.
+Adtechs will define and be responsible for the Sevice Level Objective (SLO) and  Service
+Level Agreement (SLA) of the system deployed by them.
+
+### Deployment by Coordinators
+
+Two different *Coordinators* will deploy [Key Management System A](#key-management-system-a) and
+[Key Management System B](#key-management-system-b) on every [Cloud Platform](#cloud-platform) that
+is supported.
 
 ## FLEDGE services
 
@@ -363,7 +382,16 @@ infeasible to execute on user's devices. This could be due to system health
 considerations and ad latency constraints. The FLEDGE Bidding and Auction
 service executes ad bidding and auctions remotely in the TEE.
 
-Refer to the
-[Bidding and auction service API explainer](https://github.com/privacysandbox/fledge-docs/blob/main/bidding_auction_services_api.md)
-for more information. There will be follow up documents describing the design of
-ad bidding and auction services.
+Refer to the [Bidding and auction services][6] explainer for more information. 
+
+Refer to all Bidding and Auction explainers [here][5].
+
+[1]: https://github.com/chatterjee-priyanka
+[2]: https://github.com/heyawhite
+[3]: https://github.com/sanbeiji
+[4]: https://github.com/peiwenhu
+[5]: https://github.com/privacysandbox/fledge-docs#bidding-and-auction-services
+[6]: https://github.com/privacysandbox/fledge-docs/blob/main/bidding_auction_services_api.md
+[7]: https://github.com/privacysandbox/fledge-docs/blob/main/bidding_auction_services_api.md#enroll-with-coordinators
+[8]: https://github.com/privacysandbox
+[9]: https://github.com/privacysandbox/protected-auction-services-docs/blob/main/public_cloud_tees.md

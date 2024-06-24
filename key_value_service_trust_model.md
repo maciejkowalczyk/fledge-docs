@@ -1,3 +1,5 @@
+> FLEDGE has been renamed to Protected Audience API. To learn more about the name change, see the [blog post](https://privacysandbox.com/intl/en_us/news/protected-audience-api-our-new-name-for-fledge)
+
 # FLEDGE Key/Value service trust model
 
 Authors:
@@ -6,7 +8,7 @@ Authors:
 
 ## Context
 
-We are currently in an early requirements gathering and design phase and aim to test the FLEDGE key/value service either in 2H 2022 or 1H 2023. Use of this service is not currently part of the critical path for third-party cookie deprecation, however we welcome input on the design, privacy properties and timing from the ecosystem on both setting up their own server as well as leveraging one described here.
+The Privacy Sandbox team is developing the FLEDGE key/value service and [an initial version](https://github.com/privacysandbox/fledge-key-value-service) is ready for Adtechs to test out. Use of this service is not currently part of the critical path for third-party cookie deprecation, but [will be required eventually](https://developer.chrome.com/docs/privacy-sandbox/fledge-api/feature-status/). We welcome input on the design, privacy properties and timing from the ecosystem on both setting up their own server as well as leveraging one described here.
 
 ## Introduction
 
@@ -120,8 +122,8 @@ The encryption is bi-directional. Responses back to the client software are also
 
 The initial implementation strategy for the key/value service is as follows:
 
-*   A subsequent update of the [API explainer](https://github.com/WICG/turtledove/blob/main/FLEDGE_Key_Value_Server_API.md) would incorporate new parameters to the Read API to facilitate secure communication, [Github issue here](https://github.com/WICG/turtledove/issues/294).
-*   The TEE based key/value service implementation would be deployed on cloud service(s) which support needed security features. We envision the key/value service being capable of deployment with multiple cloud providers.
+*   A newer version of the query API dedicated for the TEE-based service is presented in the [API explainer](https://github.com/WICG/turtledove/blob/main/FLEDGE_Key_Value_Server_API.md).
+*   The TEE based key/value service implementation would be deployed on cloud service(s) which support needed security features. We envision the key/value service being capable of deployment with multiple cloud providers. Currently the implementation is [available for testing](https://github.com/privacysandbox/fledge-key-value-service) and its development to add more features and improve its production-readiness is in progress.
 
 ## Support for user-defined functions (UDFs)
 
@@ -141,7 +143,7 @@ The following principles are necessary in order to preserve the trust model:
 
 *   _Sandbox_ - the custom code will be executed inside a sandbox that limits what it is allowed to do.  We're currently looking at the [Open Source V8 engine](https://v8.dev/) inside [Sandbox2](https://developers.google.com/code-sandboxing/sandbox2), which has support for both JavaScript and Web Assembly (WASM).  Other suggestions are welcome!
 *   _No network, disk access, timers, or logging_ - this will be enforced using the sandbox, above.  This preserves the key/value service's principle of no side-effects and avoids leaking user data.  Coarse timers may be allowed but fine-grained timers are disallowed to help prevent covert channels (e.g. SPECTRE).
-*   _Individual request handling_ - Per the [FLEDGE explainer](https://github.com/WICG/turtledove/blob/main/FLEDGE.md#31-fetching-real-time-data-from-a-trusted-server), a request to the key/value service may be for multiple keys. The UDF will be called separately for each individual key, rather than once for all of the keys. This ensures that each key is processed independently and prevents a group of keys from being used as a cross-site profile for a user.
+*   _Partitioned request handling_ - Per the [FLEDGE explainer](https://github.com/WICG/turtledove/blob/main/FLEDGE.md#31-fetching-real-time-data-from-a-trusted-server), a request to the key/value service may be for multiple keys. In the [key/value query API v2](https://github.com/WICG/turtledove/blob/main/FLEDGE_Key_Value_Server_API.md#query-api-version-2), a request consists of multiple partitions. Each partition contains a collection of keys that can be processed together without privacy leakage. The UDF will be called for each partition. This prevents groups of keys from being used as a cross-site profile for a user.
 *   _Data store APIs_ - The key/value service will expose an API to the UDF to read data from the data store.  There will be no write APIs to the data store.
 *   _Side-effect free_ - The UDF can read data from the Data store APIs but cannot write data to any location apart from returning it to the FLEDGE client.  No state is shared between UDF executions.
 *   _Limited request metadata access_ - Each request to the key/value service contains the keys to look up as well as some amount of request metadata.  This includes the user IP address, request timestamp, and [experiment id](https://github.com/WICG/turtledove/issues/191).  We expect to allow the UDF to have access to some of this metadata and will be updating this explainer with details of that once we work through how this will fit into the privacy model.
@@ -149,7 +151,44 @@ The following principles are necessary in order to preserve the trust model:
 
 ### API
 
-We'll update the [API explainer](https://github.com/WICG/turtledove/blob/main/FLEDGE_Key_Value_Server_API.md) with the APIs that we plan to provide for UDFs.
+For the APIs we plan to provide for UDFs, please see the [UDF explainer](https://github.com/privacysandbox/fledge-docs/blob/main/key_value_user_defined_functions.md).
+
+## Cross-site identifier handling
+
+### Protections
+
+> “IP addresses can be stable over periods of time, which can lead to user identification across first-parties.”
+
+– [IP protection proposal](https://developer.chrome.com/docs/privacy-sandbox/ip-protection/)
+
+Along with the key/value service requests, some metadata may be present that can be potentially considered cross-site identifiers, such as IP addresses, browser agent, etc.
+
+The [Trusted Execution Environment](https://github.com/privacysandbox/fledge-docs/blob/main/trusted_services_overview.md#trusted-execution-environment) (TEE)-based key/value service enforcement does not require IP protection to be in place to begin. But the IP protection will eventually enhance the privacy property of the service.
+
+With the key/value service trust model, the visibility of IP address and other metadata has the following properties:
+
+1. The operator of a trusted key/value service can observe the incoming traffic’s IP addresses. Even though the server itself runs inside TEE, a TEE (and the server that runs inside it) is only one of many components in the system. Other components in the serving path, such as the load balancer, can observe all the traffic and have information of the IP address of each request.
+1. The [user-defined functions](https://github.com/privacysandbox/fledge-docs/blob/main/key_value_service_trust_model.md#support-for-user-defined-functions-udfs) (UDF) that is executed by the server inside TEE, is subject to the server code regarding whether or not it can see the IP address, and the server code is not modifiable by the server operator.
+1. Requests from the [bidding & auction service](https://github.com/privacysandbox/fledge-docs/blob/main/bidding_auction_services_api.md) may effectively contain these user metadata too.
+
+There are then primarily 2 questions around this:
+
+1: What user privacy improvements does the TEE-based key/value service have to protect against user profile building with IP addresses or other cross-site metadata?
+
+For IP addresses which will be protected by the [IP protection project](https://developer.chrome.com/docs/privacy-sandbox/ip-protection/), they will be hidden from the K/V service.
+
+For other IP addresses or metadata, there are still substantial constraints. Tracking the user requires information about the user's activities. As stated in previous sections, the key/value request and response content is only visible inside the TEE. From the service operator’s point of view, it only knows that a user with a certain IP address has sent an opaque request to the service and receives an opaque response.
+
+There is very limited information in this exchange that the operator can observe, such as the time or size of the request and the number of requests within a time period. This significantly reduces the amount of observable information compared to the BYOS key/value service model, and is an even greater privacy improvement compared to the 3rd party cookie model.
+
+2: Can the operator perform precise microtargeting based on the IP address or other metadata?
+
+From the [Protected Audience API explainer](https://github.com/WICG/turtledove/blob/main/FLEDGE.md#summary:~:text=protection%20against%20microtargeting): “The browser will provide protection against microtargeting, by only rendering an ad if the same rendering URL is being shown to a sufficiently large number of people.” This is achieved using the [k-anonymity server](https://github.com/WICG/turtledove/blob/main/FLEDGE_k_anonymity_server.md).
+
+### Engage and share feedback
+
+Depending on the use cases, the Geolocation could be calculated before the key/value look up time, or at a coarser level than a precise value.
+If you have use cases that require IPGeo calculations at key/value lookup time with a specific level of granularity, please leave feedback by posting in the [key/value github service repo](https://github.com/privacysandbox/fledge-key-value-service) or via other channels.
 
 ## Open questions
 
